@@ -11,8 +11,11 @@ class ViewMeta(type):
         if not bases or HTTPEndpoint in bases:
             return instance
 
-        assert 'manager' in attrs, f'{instance.__name__} missing manager in view'
-        assert 'serializer_class' in attrs, f'{instance.__name__} missing serializer_class in view'
+        if 'manager' not in attrs:
+            raise ValueError(f'{instance.__name__} missing manager in view')
+
+        if 'serializer_class' not in attrs:
+            raise ValueError(f'{instance.__name__} missing serializer_class in view')
 
         instance.manager = attrs['manager']
         instance.serializer = attrs['serializer_class']

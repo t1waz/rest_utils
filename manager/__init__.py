@@ -1,4 +1,7 @@
 class Manager:
+    """
+    Simple interface for CRUD operations on model.
+    """
     @classmethod
     def get_queryset(cls):
         return cls.model.all
