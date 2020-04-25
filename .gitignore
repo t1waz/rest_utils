@@ -2,4 +2,4 @@
 .tox/
 :memory1:
 rest_utils.egg-info/
-
+.idea/

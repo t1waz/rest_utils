@@ -26,14 +26,14 @@ from tests.helpers import DBHandler
 
 class TestSerializerMeta(unittest.TestCase):
     def test_missing_serializer_meta(self):
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             class MissingMetaSerializerOne(Serializer):
                 pass
 
             assert MissingMetaSerializerOne
 
     def test_incorrect_serializer_meta_manager_as_model(self):
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             class IncorrectMetaManagerSerializerOne(Serializer):
                 class Meta:
                     manager = IncorrectModel
@@ -41,7 +41,7 @@ class TestSerializerMeta(unittest.TestCase):
             assert IncorrectMetaManagerSerializerOne
 
     def test_incorrect_serializer_meta_manager(self):
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             class IncorrectMetaManagerSerializerOne(Serializer):
                 class Meta:
                     manager = IncorrectModelManager
@@ -49,7 +49,7 @@ class TestSerializerMeta(unittest.TestCase):
             assert IncorrectMetaManagerSerializerOne
 
     def test_missing_serializer_meta_fields(self):
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             class MissingMetaFieldsSerializerOne(Serializer):
                 class Meta:
                     manager = SampleModelManager
@@ -57,7 +57,7 @@ class TestSerializerMeta(unittest.TestCase):
             assert MissingMetaFieldsSerializerOne
 
     def test_incorrect_serializer_meta_fields(self):
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             class IncorrectMetaFieldsSerializerOne(Serializer):
                 class Meta:
                     manager = SampleModelManager
@@ -65,7 +65,7 @@ class TestSerializerMeta(unittest.TestCase):
 
             assert IncorrectMetaFieldsSerializerOne
 
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             class IncorrectMetaFieldsSerializerTwo(Serializer):
                 class Meta:
                     manager = SampleModelManager
@@ -73,7 +73,7 @@ class TestSerializerMeta(unittest.TestCase):
 
             assert IncorrectMetaFieldsSerializerTwo
 
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             class IncorrectMetaFieldsSerializerThree(Serializer):
                 class Meta:
                     manager = SampleModelManager
@@ -81,7 +81,7 @@ class TestSerializerMeta(unittest.TestCase):
 
             assert IncorrectMetaFieldsSerializerThree
 
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             class IncorrectMetaFieldsSerializerFour(Serializer):
                 class Meta:
                     manager = SampleModelManager
@@ -90,7 +90,7 @@ class TestSerializerMeta(unittest.TestCase):
             assert IncorrectMetaFieldsSerializerFour
 
     def test_incorrect_read_only_fields(self):
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             class IncorrectMetaFieldsSerializerFive(Serializer):
                 class Meta:
                     manager = SampleModelManager
@@ -99,7 +99,7 @@ class TestSerializerMeta(unittest.TestCase):
 
             assert IncorrectMetaFieldsSerializerFive
 
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             class IncorrectMetaFieldsSerializerSix(Serializer):
                 class Meta:
                     manager = SampleModelManager
@@ -117,7 +117,7 @@ class TestSerializerMeta(unittest.TestCase):
         assert CorrectSerializerOne
 
     def test_incorrect_serializer_foreign_key_declaration(self):
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             class IncorrectMetaRelatedOne(Serializer):
                 class Meta:
                     manager = SampleModelChildManager
@@ -125,7 +125,7 @@ class TestSerializerMeta(unittest.TestCase):
 
             assert IncorrectMetaRelatedOne
 
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             class IncorrectMetaRelatedTwo(Serializer):
                 incorrect = ForeignKeyField(many=False,
                                             queryset=None,
@@ -137,7 +137,7 @@ class TestSerializerMeta(unittest.TestCase):
 
             assert IncorrectMetaRelatedTwo
 
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             class IncorrectMetaRelatedThree(Serializer):
                 sample_model = ForeignKeyField(many=False,
                                                queryset=None,
