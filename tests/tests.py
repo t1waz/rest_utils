@@ -14,9 +14,6 @@ from serializer.fields import (
 from tests.fixtures import (
     SampleModel,
     SampleModelChild,
-    SampleModelManager,
-    SampleModelChildManager,
-    IncorrectModelManager,
     IncorrectModel,
     CorrectSerializerOne,
     CorrectSerializerTwo,
@@ -27,32 +24,24 @@ from tests.helpers import DBHandler
 class TestSerializerMeta(unittest.TestCase):
     def test_missing_serializer_meta(self):
         with self.assertRaises(ValueError):
-            class MissingMetaSerializerOne(Serializer):
+            class MissingMetaSerializer(Serializer):
                 pass
 
-            assert MissingMetaSerializerOne
+            assert MissingMetaSerializer
 
-    def test_incorrect_serializer_meta_manager_as_model(self):
+    def test_incorrect_serializer_meta_model(self):
         with self.assertRaises(ValueError):
-            class IncorrectMetaManagerSerializerOne(Serializer):
+            class IncorrectMetaModelSerializer(Serializer):
                 class Meta:
-                    manager = IncorrectModel
+                    model = IncorrectModel
 
-            assert IncorrectMetaManagerSerializerOne
-
-    def test_incorrect_serializer_meta_manager(self):
-        with self.assertRaises(ValueError):
-            class IncorrectMetaManagerSerializerOne(Serializer):
-                class Meta:
-                    manager = IncorrectModelManager
-
-            assert IncorrectMetaManagerSerializerOne
+            assert IncorrectMetaModelSerializer
 
     def test_missing_serializer_meta_fields(self):
         with self.assertRaises(ValueError):
             class MissingMetaFieldsSerializerOne(Serializer):
                 class Meta:
-                    manager = SampleModelManager
+                    model = SampleModel
 
             assert MissingMetaFieldsSerializerOne
 
@@ -60,7 +49,7 @@ class TestSerializerMeta(unittest.TestCase):
         with self.assertRaises(ValueError):
             class IncorrectMetaFieldsSerializerOne(Serializer):
                 class Meta:
-                    manager = SampleModelManager
+                    model = SampleModel
                     fields = None
 
             assert IncorrectMetaFieldsSerializerOne
@@ -68,7 +57,7 @@ class TestSerializerMeta(unittest.TestCase):
         with self.assertRaises(ValueError):
             class IncorrectMetaFieldsSerializerTwo(Serializer):
                 class Meta:
-                    manager = SampleModelManager
+                    model = SampleModel
                     fields = ()
 
             assert IncorrectMetaFieldsSerializerTwo
@@ -76,7 +65,7 @@ class TestSerializerMeta(unittest.TestCase):
         with self.assertRaises(ValueError):
             class IncorrectMetaFieldsSerializerThree(Serializer):
                 class Meta:
-                    manager = SampleModelManager
+                    model = SampleModel
                     fields = ('incorrect_value', )
 
             assert IncorrectMetaFieldsSerializerThree
@@ -84,7 +73,7 @@ class TestSerializerMeta(unittest.TestCase):
         with self.assertRaises(ValueError):
             class IncorrectMetaFieldsSerializerFour(Serializer):
                 class Meta:
-                    manager = SampleModelManager
+                    model = SampleModel
                     fields = ('id', 'incorrect_value')
 
             assert IncorrectMetaFieldsSerializerFour
@@ -93,7 +82,7 @@ class TestSerializerMeta(unittest.TestCase):
         with self.assertRaises(ValueError):
             class IncorrectMetaFieldsSerializerFive(Serializer):
                 class Meta:
-                    manager = SampleModelManager
+                    model = SampleModel
                     fields = ('id',)
                     read_only_fields = ('incorrect_value',)
 
@@ -102,7 +91,7 @@ class TestSerializerMeta(unittest.TestCase):
         with self.assertRaises(ValueError):
             class IncorrectMetaFieldsSerializerSix(Serializer):
                 class Meta:
-                    manager = SampleModelManager
+                    model = SampleModel
                     fields = ('id',)
                     read_only_fields = ('id', 'incorrect_value')
 
@@ -111,7 +100,7 @@ class TestSerializerMeta(unittest.TestCase):
     def test_correct_serializer(self):
         class CorrectSerializerOne(Serializer):
             class Meta:
-                manager = SampleModelManager
+                model = SampleModel
                 fields = ('id', )
 
         assert CorrectSerializerOne
@@ -120,7 +109,7 @@ class TestSerializerMeta(unittest.TestCase):
         with self.assertRaises(ValueError):
             class IncorrectMetaRelatedOne(Serializer):
                 class Meta:
-                    manager = SampleModelChildManager
+                    model = SampleModelChild
                     fields = ('id', 'sample_model')
 
             assert IncorrectMetaRelatedOne
@@ -132,7 +121,7 @@ class TestSerializerMeta(unittest.TestCase):
                                             slug_field='sample_model')
 
                 class Meta:
-                    manager = SampleModelChildManager
+                    model =  SampleModelChild
                     fields = ('id', 'sample_model')
 
             assert IncorrectMetaRelatedTwo
@@ -144,15 +133,15 @@ class TestSerializerMeta(unittest.TestCase):
                                                slug_field='name')
 
                 class Meta:
-                    manager = SampleModelChildManager
+                    model = SampleModelChild
                     fields = ('id',)
 
             assert IncorrectMetaRelatedThree
 
     def test_serializer_model_initialization(self):
         correct_serializer = CorrectSerializerOne()
-        assert hasattr(correct_serializer, 'manager')
-        assert correct_serializer.manager == SampleModelManager
+        assert hasattr(correct_serializer, 'model')
+        assert correct_serializer.model == SampleModel
         assert hasattr(correct_serializer, 'model_pk_field_name')
         assert correct_serializer.model_pk_field_name == SampleModel._meta.pk_attr
 
@@ -325,7 +314,8 @@ class TestSerializer(unittest.TestCase):
             for name, value in serializer.validated_data.items():
                 assert getattr(instance, name) == value
 
-            dict_instance = asyncio.get_event_loop().run_until_complete(serializer.save(to_dict=True))
+            dict_instance = asyncio.get_event_loop().run_until_complete(
+                serializer.save(to_dict=True))
 
             assert isinstance(dict_instance, dict)
             assert all(attr in dict_instance for attr in input_data)
@@ -398,6 +388,7 @@ class TestSerializer(unittest.TestCase):
 
     def test_serializer_update(self):
         pass
+
 
 if __name__ == '__main__':
     unittest.main()

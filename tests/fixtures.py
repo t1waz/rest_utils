@@ -2,16 +2,11 @@ from serializer import Serializer
 from serializer.fields import ForeignKeyField
 from tortoise import fields
 from tortoise.models import Model
-from manager import Manager
 
 
 class SampleModel(Model):
     id = fields.IntField(pk=True)
     name = fields.TextField(max_length=400)
-
-
-class SampleModelManager(Manager):
-    model = SampleModel
 
 
 class SampleModelChild(Model):
@@ -23,31 +18,23 @@ class SampleModelChild(Model):
     sample_model = fields.ForeignKeyField('tests.SampleModel', related_name='childs')
 
 
-class SampleModelChildManager(Manager):
-    model = SampleModelChild
-
-
 class IncorrectModel:
     pass
 
 
-class IncorrectModelManager(Manager):
-    model = IncorrectModel
-
-
 class CorrectSerializerOne(Serializer):
     class Meta:
-        manager = SampleModelManager
+        model = SampleModel
         fields = ('id',)
 
 
 class CorrectSerializerTwo(Serializer):
     sample_model = ForeignKeyField(many=False,
-                                   queryset=SampleModelManager.all(),
+                                   queryset=lambda: SampleModel.all(),
                                    slug_field='name')
 
     class Meta:
-        manager = SampleModelChildManager
+        model = SampleModelChild
         fields = ('id', 'name', 'number', 'created', 'data', 'sample_model', 'ser_test')
         read_only_fields = ('created',)
 
@@ -57,9 +44,9 @@ class CorrectSerializerTwo(Serializer):
 
 class CorrectSerializerThree(Serializer):
     sample_model = ForeignKeyField(many=False,
-                                   queryset=SampleModelManager.all(),
+                                   queryset=lambda: SampleModel.all(),
                                    slug_field='name')
 
     class Meta:
-        manager = SampleModelChildManager
+        model = SampleModelChild
         fields = ('id', 'sample_model')

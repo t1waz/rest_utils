@@ -38,8 +38,8 @@ class SerializerMeta(type):
         if meta is None:
             raise ValueError(f'{instance.__name__} missing Meta')
 
-        if not hasattr(meta, 'manager'):
-            raise ValueError(f'{instance.__name__} Meta missing manager')
+        if not hasattr(meta, 'model'):
+            raise ValueError(f'{instance.__name__} Meta missing model')
 
         if not hasattr(meta, 'fields'):
             raise ValueError(f'{instance.__name__} Meta missing fields')
@@ -50,24 +50,24 @@ class SerializerMeta(type):
         if len(meta.fields) == 0:
             raise ValueError(f'{instance.__name__} fields zero length')
 
-        if not issubclass(meta.manager.model, Model):
-            raise ValueError(f'{instance.__name__} Meta model from manager is not '
-                             f'TorToise model instance')
+        if not issubclass(meta.model, Model):
+            raise ValueError(f'{instance.__name__} Meta model is not TorToise model instance')
 
         serialized_fields = [cls.get_variable_from_method_name(name, 'get_', '_') for name, attr in
                              attrs.items() if cls.get_variable_from_method_name(name, 'get_', '_')
                              and callable(attr)]
-        allowed_fields = list(meta.manager.model._meta.fields) + serialized_fields
+        allowed_fields = list(meta.model._meta.fields) + serialized_fields
+
         if not all(attr in allowed_fields for attr in meta.fields):
             raise ValueError(f'incorrect Meta field declaration - some fields does '
-                             f'not belong to manager model or serialized fields')
+                             f'not belong to model or serialized fields')
 
         read_only_fields = getattr(meta, 'read_only_fields', None)
         if read_only_fields and not all(attr in allowed_fields for attr in read_only_fields):
             raise ValueError('incorrect Meta read_only_field declaration - some fields '
-                             'does not belong to manager model or serialized fields')
+                             'does not belong to model or serialized fields')
 
-        model_fk_fields = meta.manager.model._meta.fk_fields
+        model_fk_fields = meta.model._meta.fk_fields
         if model_fk_fields:
             fk_attrs = [name for name, field in attrs.items() if
                         isinstance(field, ForeignKeyField)]
@@ -91,13 +91,13 @@ class SerializerMeta(type):
         meta = attrs.get('Meta')
         cls.validate_meta(cls, meta, instance, attrs)
 
-        instance.manager = meta.manager
-        instance.model_pk_field_name = instance.manager.model._meta.pk_attr
+        instance.model = meta.model
+        instance.model_pk_field_name = instance.model._meta.pk_attr
 
         instance.fields = OrderedDict()
 
         for field_name in meta.fields:
-            model_field = meta.manager.model._meta.fields_map.get(field_name)
+            model_field = meta.model._meta.fields_map.get(field_name)
             field = cls.FIELD_MAPPING.get(model_field.__class__, MethodField)
 
             if field is MethodField:
@@ -122,7 +122,7 @@ class Serializer(metaclass=SerializerMeta):
     Simple serializer inspired by Django REST.
     """
     def __init__(self, instance=None, data=None):
-        if instance and not issubclass(instance.__class__, self.manager.model):
+        if instance and not issubclass(instance.__class__, self.model):
             raise ValidationError(f'{self.__class__.__name__} instance not serializer model class')
 
         self._data = data
@@ -194,7 +194,8 @@ class Serializer(metaclass=SerializerMeta):
             raise ValidationError('run is_valid first')
 
         try:
-            self._instance = await self.manager.create(**self._validated_data)
+            self._instance = self.model(**self._validated_data)
+            await self._instance.save()
         except exceptions.IntegrityError:
             self._errors.update({'error': 'cannot save instance'})
 
