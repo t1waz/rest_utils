@@ -17,8 +17,12 @@ from tests.fixtures import (
     IncorrectModel,
     CorrectSerializerOne,
     CorrectSerializerTwo,
+    SampleModelView,
+    SampleModelChildView,
 )
 from tests.helpers import DBHandler
+from view import View
+from starlette.testclient import TestClient
 
 
 class TestSerializerMeta(unittest.TestCase):
@@ -257,7 +261,7 @@ class TestSerializer(unittest.TestCase):
         assert not errors
 
     def test_serializer_is_valid_for_invalid_data(self):
-        with DBHandler() as db_handler:
+        with DBHandler():
             input_data = {
                 'name': 'test name',
                 'number': 'aaa',
@@ -280,7 +284,7 @@ class TestSerializer(unittest.TestCase):
                                          'sample_model': 'name number 1 does not exists'}
 
     def test_serializer_is_valid_for_valid_data(self):
-        with DBHandler() as db_handler:
+        with DBHandler():
             input_data = {
                 'name': 'correct name',
                 'number': 23,
@@ -294,7 +298,7 @@ class TestSerializer(unittest.TestCase):
             assert not serializer.errors
 
     def test_serializer_save(self):
-        with DBHandler() as db_handler:
+        with DBHandler():
             input_data = {
                 'name': 'correct name',
                 'number': 55,
@@ -321,7 +325,7 @@ class TestSerializer(unittest.TestCase):
             assert all(attr in dict_instance for attr in input_data)
 
     def test_serializer_is_valid_if_no_data(self):
-        with DBHandler() as db_handler:
+        with DBHandler():
             serializer = CorrectSerializerTwo(data={})
             with self.assertRaises(ValidationError):
                 is_valid = asyncio.get_event_loop().run_until_complete(serializer.is_valid())
@@ -338,7 +342,7 @@ class TestSerializer(unittest.TestCase):
             assert serializer
 
     def test_serializer_save_invalid_data(self):
-        with DBHandler() as db_handler:
+        with DBHandler():
             input_data = {
                 'name': 'test name',
                 'number': 'aaa',
@@ -363,7 +367,7 @@ class TestSerializer(unittest.TestCase):
                 assert instance
 
     def test_serializer_get_dict_for_valid_data(self):
-        with DBHandler() as db_handler:
+        with DBHandler():
             input_data = {
                 'name': 'correct name',
                 'number': 55,
@@ -387,6 +391,50 @@ class TestSerializer(unittest.TestCase):
             assert all(attr in dict_instance for attr in input_data)
 
     def test_serializer_update(self):
+        pass
+
+
+class TestViewMeta(unittest.TestCase):
+    def test_missing_queryset_in_view(self):
+        with self.assertRaises(ValueError):
+            class MissingQuerysetView(View):
+                pass
+
+            assert MissingQuerysetView
+
+    def test_missing_serializer_class_in_view(self):
+        with self.assertRaises(ValueError):
+            class MissingSerializerClassView(View):
+                pass
+
+            assert MissingSerializerClassView
+
+
+class TestView(unittest.TestCase):
+    def test_get_instance(self):
+        with DBHandler():
+            sample_model = asyncio.get_event_loop().run_until_complete(SampleModel.first())
+            client = TestClient(SampleModelView)
+            print(client.request(params="1", method='GET', url=f'/{sample_model.id}'))
+            print(f'/{sample_model.id}')
+            response = client.get(f'/{sample_model.id}')
+
+            # request = FakeRequest(path_params={'id': sample_model.id})
+            # function = getattr(View, 'get')
+            # response = asyncio.get_event_loop().run_until_complete(function(SampleModelView, request))
+            # print(response)
+            assert 1 == 0
+
+    def test_get_instances(self):
+        pass
+
+    def test_post(self):
+        pass
+
+    def test_update(self):
+        pass
+
+    def test_delete(self):
         pass
 
 

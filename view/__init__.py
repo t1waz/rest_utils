@@ -11,13 +11,13 @@ class ViewMeta(type):
         if not bases or HTTPEndpoint in bases:
             return instance
 
-        if 'manager' not in attrs:
-            raise ValueError(f'{instance.__name__} missing manager in view')
+        if 'queryset' not in attrs:
+            raise ValueError(f'{instance.__name__} missing queryset in view')
 
         if 'serializer_class' not in attrs:
             raise ValueError(f'{instance.__name__} missing serializer_class in view')
 
-        instance.manager = attrs['manager']
+        instance.queryset = attrs['queryset']
         instance.serializer = attrs['serializer_class']
 
         return instance
@@ -40,7 +40,7 @@ class View(HTTPEndpoint, metaclass=ViewMeta):
 
     async def get_instance_from_pk(self, pk):
         try:
-            return await self.manager.get(**{self.serializer_class.model_pk_field_name: pk})
+            return await self.queryset.get(**{self.serializer_class.model_pk_field_name: pk})
         except exceptions.DoesNotExist:
             return None
 
@@ -74,7 +74,7 @@ class View(HTTPEndpoint, metaclass=ViewMeta):
 
     async def get(self, request):
         pk = request.path_params.get('id')
-
+        print(request.path_params, 'path params')
         if not pk:
             instances = await self.manager.all()
             tasks = [self.serializer_class(instance=instance).to_dict() for instance in instances]

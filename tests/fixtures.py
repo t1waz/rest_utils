@@ -2,6 +2,7 @@ from serializer import Serializer
 from serializer.fields import ForeignKeyField
 from tortoise import fields
 from tortoise.models import Model
+from view import View
 
 
 class SampleModel(Model):
@@ -50,3 +51,19 @@ class CorrectSerializerThree(Serializer):
     class Meta:
         model = SampleModelChild
         fields = ('id', 'sample_model')
+
+
+class CorrectSerializerFour(Serializer):
+    class Meta:
+        model = SampleModel
+        fields = ('id', 'name')
+
+
+class SampleModelView(View):
+    queryset = lambda: SampleModel.all()
+    serializer_class = CorrectSerializerFour
+
+
+class SampleModelChildView(View):
+    queryset = lambda: SampleModelChild.all()
+    serializer_class = CorrectSerializerTwo

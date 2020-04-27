@@ -222,6 +222,9 @@ class Serializer(metaclass=SerializerMeta):
 
         return status
 
+    async def delete(self):
+        pass
+
     @property
     def validated_data(self):
         return self._validated_data
