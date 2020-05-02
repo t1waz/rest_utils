@@ -1,8 +1,9 @@
-from serializer import Serializer
-from serializer.fields import ForeignKeyField
 from tortoise import fields
 from tortoise.models import Model
-from view import View
+
+from tortoise_rest_utils.serializer import Serializer
+from tortoise_rest_utils.serializer.fields import ForeignKeyField
+from tortoise_rest_utils.view import View
 
 
 class SampleModel(Model):
@@ -60,10 +61,14 @@ class CorrectSerializerFour(Serializer):
 
 
 class SampleModelView(View):
-    queryset = lambda: SampleModel.all()
     serializer_class = CorrectSerializerFour
+
+    def get_queryset(self):
+        return SampleModel.all()
 
 
 class SampleModelChildView(View):
-    queryset = lambda: SampleModelChild.all()
     serializer_class = CorrectSerializerTwo
+
+    def get_queryset(self):
+        return SampleModelChild.all()

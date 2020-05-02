@@ -2,13 +2,12 @@ import asyncio
 from collections import OrderedDict
 from collections.abc import Iterable
 
-from tortoise import exceptions
 from tortoise import fields as model_fields
 from tortoise.fields.relational import ForeignKeyFieldInstance
 from tortoise.models import Model
 
-from serializer.exceptions import ValidationError
-from serializer.fields import (
+from tortoise_rest_utils.serializer.exceptions import ValidationError
+from tortoise_rest_utils.serializer.fields import (
     StringField,
     IntegerField,
     ForeignKeyField,
@@ -18,7 +17,7 @@ from serializer.fields import (
 )
 
 
-class SerializerInstanceValidator:
+class SerializerValidator:
     def __init__(self, instance, attrs):
         self._instance = instance
         self._attrs = attrs
@@ -108,9 +107,6 @@ class SerializerInstanceValidator:
 
 
 class SerializerMeta(type):
-    """
-    Meta class for Serializer. Provide creation and validation for new Serializer instances.
-    """
     FIELD_MAPPING = {
         model_fields.UUIDField: StringField,
         model_fields.TextField: StringField,
@@ -125,12 +121,11 @@ class SerializerMeta(type):
         if not bases:
             return instance
 
-        SerializerInstanceValidator.validate(instance, attrs)
+        SerializerValidator.validate(instance, attrs)
         meta = attrs.get('Meta')
 
         instance.model = meta.model
         instance.model_pk_field_name = instance.model._meta.pk_attr
-
         instance.fields = OrderedDict()
 
         for field_name in meta.fields:
@@ -155,12 +150,12 @@ class SerializerMeta(type):
 
 
 class Serializer(metaclass=SerializerMeta):
-    """
-    Simple serializer inspired by Django REST.
-    """
     def __init__(self, instance=None, data=None):
         if instance and not issubclass(instance.__class__, self.model):
             raise ValidationError(f'{self.__class__.__name__} instance not serializer model class')
+
+        if data and not isinstance(data, dict):
+            raise ValidationError(f'{self.__class__.__name__} data is not dict')
 
         self._data = data
         self._errors = {}
@@ -189,9 +184,6 @@ class Serializer(metaclass=SerializerMeta):
         return valid, errors
 
     async def is_valid(self):
-        if self._instance:
-            return True
-
         if not self._data:
             raise ValidationError('initial data not provided, cannot call is_valid()')
 
@@ -202,7 +194,6 @@ class Serializer(metaclass=SerializerMeta):
 
         tasks = [self.fields.get(name).to_internal_value(value)
                  for name, value in self._data.items()]
-
         values, errors = zip(*await asyncio.gather(*tasks))
         self._errors.update({field: error for field, error
                              in zip(self._data.keys(), errors) if error})
@@ -215,7 +206,7 @@ class Serializer(metaclass=SerializerMeta):
         return is_valid
 
     async def to_dict(self):
-        if self._data and not self.validated_data:
+        if not self._instance:
             raise ValidationError('first call is_valid')
 
         tasks = [field.to_representation(getattr(self._instance, name, self._instance))
@@ -233,8 +224,9 @@ class Serializer(metaclass=SerializerMeta):
         try:
             self._instance = self.model(**self._validated_data)
             await self._instance.save()
-        except exceptions.IntegrityError:
+        except (ValueError, AttributeError):
             self._errors.update({'error': 'cannot save instance'})
+            self._instance = None
 
         if to_dict:
             return await self.to_dict()
@@ -243,9 +235,9 @@ class Serializer(metaclass=SerializerMeta):
 
     async def update(self):
         if self._errors:
-            raise ValueError('cannot update, data not valid')
-        elif self._validated_data is None:
-            raise ValueError('run is_valid first')
+            raise ValidationError('cannot save, data not valid')
+        elif self._data is not None and self._validated_data is None:
+            raise ValidationError('run is_valid first')
 
         for attr, value in self._validated_data.items():
             setattr(self._instance, attr, value)
@@ -253,7 +245,7 @@ class Serializer(metaclass=SerializerMeta):
         status = True
         try:
             await self._instance.save()
-        except exceptions.IntegrityError:
+        except (ValueError, AttributeError):
             self._errors = 'cannot update instance, internal error'
             status = False
 

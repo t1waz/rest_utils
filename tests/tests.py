@@ -1,16 +1,18 @@
 import asyncio
+import json
 import unittest
 
-from serializer import Serializer
-from serializer.exceptions import ValidationError
-from serializer.fields import ForeignKeyField
-from serializer.fields import (
+from tortoise_rest_utils.serializer import Serializer
+from tortoise_rest_utils.serializer.exceptions import ValidationError
+from tortoise_rest_utils.serializer.fields import ForeignKeyField
+from tortoise_rest_utils.serializer.fields import (
     IntegerField,
     StringField,
     BinaryField,
     DateTimeField,
     MethodField,
 )
+from tortoise_rest_utils.view import View
 from tests.fixtures import (
     SampleModel,
     SampleModelChild,
@@ -18,11 +20,11 @@ from tests.fixtures import (
     CorrectSerializerOne,
     CorrectSerializerTwo,
     SampleModelView,
-    SampleModelChildView,
 )
-from tests.helpers import DBHandler
-from view import View
-from starlette.testclient import TestClient
+from tests.helpers import (
+    DBHandler,
+    FakeRequest,
+)
 
 
 class TestSerializerMeta(unittest.TestCase):
@@ -405,38 +407,164 @@ class TestViewMeta(unittest.TestCase):
     def test_missing_serializer_class_in_view(self):
         with self.assertRaises(ValueError):
             class MissingSerializerClassView(View):
-                pass
+                queryset = None
 
             assert MissingSerializerClassView
 
 
 class TestView(unittest.TestCase):
-    def test_get_instance(self):
-        pass
-        # with DBHandler():
-        #     sample_model = asyncio.get_event_loop().run_until_complete(SampleModel.first())
-        #     client = TestClient(SampleModelView)
-        #     print(client.request(params="1", method='GET', url=f'/{sample_model.id}'))
-        #     print(f'/{sample_model.id}')
-        #     response = client.get(f'/{sample_model.id}')
-        #
-        #     # request = FakeRequest(path_params={'id': sample_model.id})
-        #     # function = getattr(View, 'get')
-        #     # response = asyncio.get_event_loop().run_until_complete(function(SampleModelView, request))
-        #     # print(response)
-        #     assert 1 == 0
+    def setUp(self):
+        self.sample_model_view = SampleModelView({'type': 'http'}, None, None)
 
-    def test_get_instances(self):
-        pass
+    def test_get_list(self):
+        with DBHandler():
+            response = asyncio.get_event_loop().run_until_complete(
+                self.sample_model_view.list(FakeRequest()))
+            response_data = json.loads(response.body.decode())
+            sample_models = asyncio.get_event_loop().run_until_complete(
+                SampleModel.all()
+            )
+            models_dicts = [{'id': sample_model.id, 'name': sample_model.name}
+                            for sample_model in sample_models]
 
-    def test_post(self):
-        pass
+            assert models_dicts == response_data
+
+    def test_get_correct_instance(self):
+        with DBHandler():
+            sample_model = asyncio.get_event_loop().run_until_complete(SampleModel.first())
+            response = asyncio.get_event_loop().run_until_complete(
+                self.sample_model_view.instance(FakeRequest(url_params={'id': sample_model.id})))
+            response_data = json.loads(response.body.decode())
+
+            assert {'id': sample_model.id, 'name': sample_model.name} == response_data
+
+    def test_get_incorrect_instance(self):
+        response = asyncio.get_event_loop().run_until_complete(
+            self.sample_model_view.instance(FakeRequest(url_params={'id': 'invalid id'})))
+        response_data = json.loads(response.body.decode())
+
+        assert response_data == {'detail': 'not found'}
+
+    def test_create_for_invalid_url(self):
+        response = asyncio.get_event_loop().run_until_complete(
+            self.sample_model_view.create(FakeRequest(url_params={'id': 'invalid id'})))
+        response_data = json.loads(response.body.decode())
+
+        assert response_data == {'detail': 'Method POST not allowed.'}
+
+    def test_create_for_incorrect_data(self):
+        response = asyncio.get_event_loop().run_until_complete(
+            self.sample_model_view.create(FakeRequest(data=b'/x///')))
+        response_data = json.loads(response.body.decode())
+
+        assert response_data == {'detail': 'invalid request for create.'}
+
+    def test_create_for_invalid_data(self):
+        response = asyncio.get_event_loop().run_until_complete(
+            self.sample_model_view.create(FakeRequest(data={'name': [1, 2, 3]})))
+        response_data = json.loads(response.body.decode())
+
+        assert response_data == {'detail': {'name': 'incorrect value, cannot transform to string'}}
+
+    def test_create_when_internal_error(self):
+        response = asyncio.get_event_loop().run_until_complete(
+            self.sample_model_view.create(
+                FakeRequest(data={'name': 'correct name but no connection'})))
+        response_data = json.loads(response.body.decode())
+
+        assert response_data == {'detail': 'cannot create, internal error'}
+
+    def test_create(self):
+        with DBHandler():
+            create_data = {'name': 'correct name'}
+            response = asyncio.get_event_loop().run_until_complete(
+                self.sample_model_view.create(FakeRequest(data={'name': 'correct name'})))
+            response_data = json.loads(response.body.decode())
+
+            new_instance = asyncio.get_event_loop().run_until_complete(
+                SampleModel.get(**create_data))
+
+            assert {'id': new_instance.id, 'name': new_instance.name} == response_data
+
+    def test_update_for_invalid_url(self):
+        response = asyncio.get_event_loop().run_until_complete(
+            self.sample_model_view.update(FakeRequest(url_params={})))
+        response_data = json.loads(response.body.decode())
+
+        assert response_data == {'detail': 'Method PATCH not allowed.'}
+
+    def test_update_for_incorrect_data(self):
+        with DBHandler():
+            sample_model = asyncio.get_event_loop().run_until_complete(SampleModel.first())
+            response = asyncio.get_event_loop().run_until_complete(
+                self.sample_model_view.update(FakeRequest(url_params={'id': sample_model.id},
+                                                      data=b'/x///')))
+            response_data = json.loads(response.body.decode())
+
+            assert response_data == {'detail': 'invalid request for update'}
+
+    def test_update_for_not_existing_pk(self):
+        response = asyncio.get_event_loop().run_until_complete(
+            self.sample_model_view.update(FakeRequest(url_params={'id': 'aa'},
+                                                      data={'name': 'correct name'})))
+        response_data = json.loads(response.body.decode())
+
+        assert response_data == {'detail': 'objects does not exists'}
+
+    def test_update_for_invalid_data(self):
+        with DBHandler():
+            sample_model = asyncio.get_event_loop().run_until_complete(SampleModel.first())
+            response = asyncio.get_event_loop().run_until_complete(
+                self.sample_model_view.update(FakeRequest(url_params={'id': sample_model.id},
+                                                          data={'name': [1, 2, 3]})))
+            response_data = json.loads(response.body.decode())
+
+            assert response_data == {
+                'detail': {
+                    'name': 'incorrect value, cannot transform to string'
+                }
+            }
 
     def test_update(self):
-        pass
+        with DBHandler():
+            update_data = {'name': 'updated name'}
+            sample_model = asyncio.get_event_loop().run_until_complete(SampleModel.first())
+            response = asyncio.get_event_loop().run_until_complete(
+                self.sample_model_view.update(FakeRequest(url_params={'id': sample_model.id},
+                                                          data=update_data)))
+            response_data = json.loads(response.body.decode())
+            sample_model = asyncio.get_event_loop().run_until_complete(
+                SampleModel.get(**update_data))
+
+            assert response_data == {
+                'id': sample_model.id,
+                'name': sample_model.name
+            }
+
+    def test_delete_for_incorrect_url(self):
+        response = asyncio.get_event_loop().run_until_complete(
+            self.sample_model_view.delete(FakeRequest()))
+        response_data = json.loads(response.body.decode())
+
+        assert response_data == {'detail': 'Method DELETE not allowed.'}
+
+    def test_delete_for_invalid_url(self):
+        response = asyncio.get_event_loop().run_until_complete(
+            self.sample_model_view.update(FakeRequest(url_params={'id': 'aaa'})))
+        response_data = json.loads(response.body.decode())
+
+        assert response_data == {'detail': 'invalid request for update'}
 
     def test_delete(self):
-        pass
+        with DBHandler():
+            sample_model = asyncio.get_event_loop().run_until_complete(SampleModel.first())
+            response = asyncio.get_event_loop().run_until_complete(
+                self.sample_model_view.delete(FakeRequest(url_params={'id': sample_model.id})))
+            response_data = json.loads(response.body.decode())
+
+            assert response_data == {'deleted': True}
+            assert asyncio.get_event_loop().run_until_complete(
+                SampleModel.filter(id=sample_model.id)) == []
 
 
 if __name__ == '__main__':

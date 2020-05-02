@@ -1,15 +1,19 @@
-import datetime
 import asyncio
+import datetime
+
+from tortoise import Tortoise
+
 from tests.fixtures import (
     SampleModel,
     SampleModelChild,
 )
-from tortoise import Tortoise
 
 
 class DBHandler:
     def __enter__(self, *args, **kwargs):
         asyncio.get_event_loop().run_until_complete(self.open_db())
+        asyncio.get_event_loop().run_until_complete(self.clear_models())
+        asyncio.get_event_loop().run_until_complete(self.init_models())
 
     def __exit__(self, *args, **kwargs):
         asyncio.get_event_loop().run_until_complete(self.close_db())
@@ -57,9 +61,19 @@ class DBHandler:
                             modules={'tests': ['tests.fixtures']})
         await Tortoise.generate_schemas()
 
-        await cls.clear_models()
-        await cls.init_models()
-
     @classmethod
     async def close_db(cls):
         await Tortoise.close_connections()
+
+
+class FakeRequest:
+    def __init__(self, url_params={}, data=None):
+        self._url_params = url_params
+        self._data = data
+
+    @property
+    def path_params(self):
+        return self._url_params
+
+    async def json(self):
+        return self._data

@@ -46,7 +46,7 @@ class ForeignKeyField(SerializerField):
 
 class IntegerField(SerializerField):
     async def to_representation(self, value):
-        return str(value)
+        return value
 
     async def to_internal_value(self, value):
         await super().to_internal_value(value)
@@ -62,10 +62,10 @@ class StringField(SerializerField):
 
     async def to_internal_value(self, value):
         await super().to_internal_value(value)
-        try:
-            return str(value), None
-        except ValueError:
+        if not isinstance(value, (int, float, str)):
             return None, 'incorrect value, cannot transform to string'
+
+        return str(value), None
 
 
 class DateTimeField(SerializerField):
