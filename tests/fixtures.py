@@ -2,7 +2,7 @@ from tortoise import fields
 from tortoise.models import Model
 
 from tortoise_rest_utils.serializer import Serializer
-from tortoise_rest_utils.serializer.fields import ForeignKeyField
+from tortoise_rest_utils.serializer.fields import SlugRelatedField
 from tortoise_rest_utils.view import View
 
 
@@ -31,9 +31,9 @@ class CorrectSerializerOne(Serializer):
 
 
 class CorrectSerializerTwo(Serializer):
-    sample_model = ForeignKeyField(many=False,
-                                   queryset=lambda: SampleModel.all(),
-                                   slug_field='name')
+    sample_model = SlugRelatedField(many=False,
+                                    queryset=lambda: SampleModel.all(),
+                                    slug_field='name')
 
     class Meta:
         model = SampleModelChild
@@ -45,9 +45,9 @@ class CorrectSerializerTwo(Serializer):
 
 
 class CorrectSerializerThree(Serializer):
-    sample_model = ForeignKeyField(many=False,
-                                   queryset=lambda: SampleModel.all(),
-                                   slug_field='name')
+    sample_model = SlugRelatedField(many=False,
+                                    queryset=lambda: SampleModel.all(),
+                                    slug_field='name')
 
     class Meta:
         model = SampleModelChild
