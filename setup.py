@@ -1,8 +1,12 @@
 import setuptools
 
 
+def requirements(file_name):
+    return open(file_name, 'rt').read().splitlines()
+
+
 setuptools.setup(name='tortoise_rest_utils',
-                 version='1.1.0',
+                 version='0.0.1',
                  author='t1waz',
                  author_email='milewiczmichal87@gmail.com',
                  description='REST tools for building backends '
@@ -16,4 +20,5 @@ setuptools.setup(name='tortoise_rest_utils',
                        "Operating System :: OS Independent",
                  ],
                  python_requires='>=3.6',
-                 zip_safe=False)
+                 zip_safe=False,
+                 install_requires=requirements('requirements.txt'))

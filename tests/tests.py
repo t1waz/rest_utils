@@ -2,17 +2,6 @@ import asyncio
 import json
 import unittest
 
-from tortoise_rest_utils.serializer import Serializer
-from tortoise_rest_utils.serializer.exceptions import ValidationError
-from tortoise_rest_utils.serializer.fields import ForeignKeyField
-from tortoise_rest_utils.serializer.fields import (
-    IntegerField,
-    StringField,
-    BinaryField,
-    DateTimeField,
-    MethodField,
-)
-from tortoise_rest_utils.view import View
 from tests.fixtures import (
     SampleModel,
     SampleModelChild,
@@ -25,6 +14,17 @@ from tests.helpers import (
     DBHandler,
     FakeRequest,
 )
+from tortoise_rest_utils.serializer import Serializer
+from tortoise_rest_utils.serializer.exceptions import ValidationError
+from tortoise_rest_utils.serializer.fields import (
+    IntegerField,
+    StringField,
+    BinaryField,
+    DateTimeField,
+    MethodField,
+)
+from tortoise_rest_utils.serializer.fields import SlugRelatedField
+from tortoise_rest_utils.view import View
 
 
 class TestSerializerMeta(unittest.TestCase):
@@ -34,6 +34,14 @@ class TestSerializerMeta(unittest.TestCase):
                 pass
 
             assert MissingMetaSerializer
+
+    def test_missing_serializer_meta_model(self):
+        with self.assertRaises(ValueError):
+            class MissingModelSerializer(Serializer):
+                class Meta:
+                    pass
+
+            assert MissingModelSerializer
 
     def test_incorrect_serializer_meta_model(self):
         with self.assertRaises(ValueError):
@@ -111,7 +119,7 @@ class TestSerializerMeta(unittest.TestCase):
 
         assert CorrectSerializerOne
 
-    def test_incorrect_serializer_foreign_key_declaration(self):
+    def test_incorrect_serializer_related_field_declaration(self):
         with self.assertRaises(ValueError):
             class IncorrectMetaRelatedOne(Serializer):
                 class Meta:
@@ -121,22 +129,32 @@ class TestSerializerMeta(unittest.TestCase):
             assert IncorrectMetaRelatedOne
 
         with self.assertRaises(ValueError):
-            class IncorrectMetaRelatedTwo(Serializer):
-                incorrect = ForeignKeyField(many=False,
-                                            queryset=None,
-                                            slug_field='sample_model')
+            class IncorrectRelatedField(Serializer):
+                sample_model = None
 
                 class Meta:
-                    model =  SampleModelChild
+                    model = SampleModelChild
+                    fields = ('id', 'sample_model')
+
+            assert IncorrectRelatedField
+
+        with self.assertRaises(ValueError):
+            class IncorrectMetaRelatedTwo(Serializer):
+                incorrect = SlugRelatedField(many=False,
+                                             queryset=None,
+                                             slug_field='sample_model')
+
+                class Meta:
+                    model = SampleModelChild
                     fields = ('id', 'sample_model')
 
             assert IncorrectMetaRelatedTwo
 
         with self.assertRaises(ValueError):
             class IncorrectMetaRelatedThree(Serializer):
-                sample_model = ForeignKeyField(many=False,
-                                               queryset=None,
-                                               slug_field='name')
+                sample_model = SlugRelatedField(many=False,
+                                                queryset=None,
+                                                slug_field='name')
 
                 class Meta:
                     model = SampleModelChild
@@ -151,7 +169,7 @@ class TestSerializerMeta(unittest.TestCase):
         assert hasattr(correct_serializer, 'model_pk_field_name')
         assert correct_serializer.model_pk_field_name == SampleModel._meta.pk_attr
 
-    def test_serializer_fields_initalization(self):
+    def test_serializer_fields_initialization(self):
         correct_serializer = CorrectSerializerTwo()
         another_serializer = CorrectSerializerTwo()
 
@@ -161,7 +179,7 @@ class TestSerializerMeta(unittest.TestCase):
             'number': IntegerField,
             'created': DateTimeField,
             'data': BinaryField,
-            'sample_model': ForeignKeyField,
+            'sample_model': SlugRelatedField,
             'ser_test': MethodField
         }
 
@@ -259,6 +277,7 @@ class TestSerializer(unittest.TestCase):
 
         serializer = CorrectSerializerTwo(data=input_data)
         is_valid, errors = serializer._check_input_data_for_missing_values()
+
         assert is_valid
         assert not errors
 
@@ -391,6 +410,11 @@ class TestSerializer(unittest.TestCase):
             assert isinstance(dict_instance, dict)
             assert 'id' in dict_instance
             assert all(attr in dict_instance for attr in input_data)
+
+    def test_serializer_get_dict_without_is_valid(self):
+        with self.assertRaises(ValidationError):
+            serializer = CorrectSerializerTwo(data={'data': {'some_data'}})
+            asyncio.get_event_loop().run_until_complete(serializer.to_dict())
 
     def test_serializer_update(self):
         pass

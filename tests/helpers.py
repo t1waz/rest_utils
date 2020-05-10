@@ -55,6 +55,13 @@ class DBHandler:
                                                 created=datetime.datetime.now())
         await sample_model_child_3.save()
 
+        sample_model_4 = SampleModelChild(name='child_4',
+                                          number=4,
+                                          data=b'4',
+                                          sample_model=sample_model_1,
+                                          created=datetime.datetime.now())
+        await sample_model_4.save()
+
     @classmethod
     async def open_db(cls):
         await Tortoise.init(db_url='sqlite://:memory1:',

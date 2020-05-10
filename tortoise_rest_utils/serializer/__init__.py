@@ -1,4 +1,5 @@
 import asyncio
+import itertools
 from collections import OrderedDict
 from collections.abc import Iterable
 
@@ -10,7 +11,7 @@ from tortoise_rest_utils.serializer.exceptions import ValidationError
 from tortoise_rest_utils.serializer.fields import (
     StringField,
     IntegerField,
-    ForeignKeyField,
+    RelatedField,
     DateTimeField,
     BinaryField,
     MethodField,
@@ -53,8 +54,8 @@ class SerializerValidator:
 
     def check_if_meta_fields_containts_proper_values(self):
         if not all(attr in self.allowed_fields for attr in self._meta.fields):
-            raise ValueError(f'incorrect Meta field declaration - some fields does '
-                             f'not belong to model or serialized fields')
+            raise ValueError('incorrect Meta field declaration - some fields does '
+                             'not belong to model or serialized fields')
 
     def check_meta_read_only_fields(self):
         read_only_fields = getattr(self._meta, 'read_only_fields', None)
@@ -62,48 +63,38 @@ class SerializerValidator:
             raise ValueError('incorrect Meta read_only_field declaration - some fields '
                              'does not belong to model or serialized fields')
 
-    def check_fk_fields_declaration(self):
-        model_fk_fields = self._meta.model._meta.fk_fields
-        if model_fk_fields:
-            fk_attrs = [name for name, field in self._attrs.items() if
-                        isinstance(field, ForeignKeyField)]
-            if not fk_attrs:
-                raise ValueError(f'{self._instance.__name__} missing foreign keys mapping')
-
-            if not all(field in self._meta.fields for field in fk_attrs):
-                raise ValueError(f'{self._instance.__name__} some related fields are not included '
-                                 f'on fields, but was specify inside serializer')
-
-            if not all(fk_attr in model_fk_fields for fk_attr in fk_attrs):
-                raise ValueError(f'{self._instance.__name__} incorrect foreign keys mapping')
-
-    def check_m2m_fields_declaration(self):
-        pass
+    def check_if_all_declared_related_fields_in_meta_fields(self):
+        if not all(attr in self._meta.fields for attr in self.declared_fields):
+            raise ValueError('incorrect related field declaration - some fields '
+                             'was not included to fields')
 
     @property
     def serialized_fields(self):
-        return [self.get_variable_from_method_name(name, 'get_', '_')
+        return {self.get_variable_from_method_name(name, 'get_', '_')
                 for name, attr in self._attrs.items() if callable(attr) and
-                self.get_variable_from_method_name(name, 'get_', '_')]
+                self.get_variable_from_method_name(name, 'get_', '_')}
+
+    @property
+    def model_fields(self):
+        return self._meta.model._meta.fields.difference(self._meta.model._meta.fk_fields)
+
+    @property
+    def declared_fields(self):
+        return {name for name, attr in self._attrs.items()
+                if issubclass(attr.__class__, RelatedField)}
 
     @property
     def allowed_fields(self):
-        return list(self._meta.model._meta.fields) + self.serialized_fields
+        return list(itertools.chain(
+            self.model_fields, self.serialized_fields, self.declared_fields))
 
     @classmethod
     def validate(cls, instance, attrs):
-        validator = cls(instance, attrs)
+        obj = cls(instance, attrs)
 
-        validator.check_if_meta_exists()
-        validator.check_if_model_in_meta()
-        validator.check_if_meta_model_is_tortoise_instance()
-        validator.check_if_fields_in_meta()
-        validator.check_if_meta_fields_are_iterable()
-        validator.check_if_meta_fields_have_items()
-        validator.check_if_meta_fields_containts_proper_values()
-        validator.check_meta_read_only_fields()
-        validator.check_fk_fields_declaration()
-        validator.check_m2m_fields_declaration()
+        for validator in (getattr(obj, validator_name) for validator_name in dir(obj)
+                          if validator_name.startswith('check')):
+            validator()
 
 
 class SerializerMeta(type):
@@ -111,9 +102,9 @@ class SerializerMeta(type):
         model_fields.UUIDField: StringField,
         model_fields.TextField: StringField,
         model_fields.IntField: IntegerField,
-        ForeignKeyFieldInstance: ForeignKeyField,
         model_fields.DatetimeField: DateTimeField,
         model_fields.BinaryField: BinaryField,
+        ForeignKeyFieldInstance: RelatedField,
     }
 
     def __new__(cls, name, bases, attrs, **kwargs):
@@ -134,8 +125,10 @@ class SerializerMeta(type):
 
             if field is MethodField:
                 field = field(method=attrs.get(f'get_{field_name}'))
+            elif field is RelatedField:
+                field = attrs.get(field_name)
             else:
-                field = attrs.get(field_name) or field()
+                field = field()
 
             field.setup_from_model_field(model_field)
             instance.fields[field_name] = field
@@ -144,7 +137,7 @@ class SerializerMeta(type):
                                           isinstance(field, MethodField))
         meta_read_only_fields = getattr(meta, 'read_only_fields', None)
         if meta_read_only_fields:
-           instance.read_only_fields = instance.read_only_fields + meta_read_only_fields
+            instance.read_only_fields = instance.read_only_fields + meta_read_only_fields
 
         return instance
 

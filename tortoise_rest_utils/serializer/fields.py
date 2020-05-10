@@ -10,7 +10,6 @@ class SerializerField:
         if value is None and not any([self._required_on_save, self._required_on_update]):
             return None, None
 
-
     @property
     def required_on_save(self):
         return self._required_on_save
@@ -20,11 +19,33 @@ class SerializerField:
         return self._required_on_update
 
 
-class ForeignKeyField(SerializerField):
-    def __init__(self, slug_field=None, queryset=None, many=False):
-        self._slug_field = slug_field
+class RelatedField(SerializerField):
+    def __init__(self, queryset=None, many=False):
         self._queryset = queryset
         self._many = many
+
+    async def to_internal_value(self, value):
+        await super().to_internal_value(value)
+
+        if self._many:
+            db_data = await self._queryset().filter(**{self._slug_field: value})
+        else:
+            db_data = await self._queryset().filter(**{self._slug_field: value}).first()
+
+        if db_data:
+            return db_data, None
+        else:
+            return None, f'{value} does not exists'
+
+
+class PrimaryKeyField(RelatedField):
+    pass
+
+
+class SlugRelatedField(RelatedField):
+    def __init__(self, *args, slug_field=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._slug_field = slug_field
 
     async def to_representation(self, value):
         if not self._many:
@@ -33,15 +54,6 @@ class ForeignKeyField(SerializerField):
         else:
             instances = await value.all()
             return [getattr(instance, self._slug_field) for instance in instances]
-
-    async def to_internal_value(self, value):
-        await super().to_internal_value(value)
-
-        related_instance = await self._queryset().filter(**{self._slug_field: value}).first()
-        if related_instance:
-            return related_instance, None
-        else:
-            return None, f'{value} does not exists'
 
 
 class IntegerField(SerializerField):
