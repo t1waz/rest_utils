@@ -1,4 +1,11 @@
-version: 2
+version: 2.1
+
+workflows:
+  build_test_and_deploy:
+    jobs:
+      - build
+      - deploy
+
 jobs:
   build:
     docker:
@@ -6,8 +13,33 @@ jobs:
     steps:
       - checkout
       - run:
+          name: run tests
           command: |
             python -m venv .venv
             source .venv/bin/activate
             pip install -r tests/requirements.txt
             tox
+  deploy:
+    docker:
+      - image: circleci/python:3.7.2
+    steps:
+      - checkout
+      - run:
+          name: verify git with version
+          command: |
+            python -m venv .venv
+            source .venv/bin/activate
+            python setup.py verify
+      - run:
+          name: init .pypirc
+          command: |
+            echo -e "[pypi]" >> ~/.pypirc
+            echo -e "username = t1waz" >> ~/.pypirc
+            echo -e "password = $PYPI_PASSWORD" >> ~/.pypirc
+      - run:
+          name: create package
+          command: |
+            pip install --user --upgrade twine
+            python setup.py sdist
+            python setup.py bdist_wheel
+            python -m twine upload dist/*
