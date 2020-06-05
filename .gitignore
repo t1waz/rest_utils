@@ -1,11 +1,12 @@
 .coverage
 .tox/
 :memory1:
-tortoise_rest_utils.egg-info/
+async_easy_utils.egg-info/
 .idea/
 */__pycache__/
 .venv
 dist
-tortoise_rest_utils_t1waz.egg-info/
+async_easy_utils_t1waz.egg-info/
 build
 */*/__pycache__/
+.pypirc

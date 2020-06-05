@@ -4,7 +4,7 @@ import sys
 from setuptools import setup, find_packages
 from setuptools.command.install import install
 
-VERSION = '0.0.1'
+VERSION = '0.0.2'
 
 
 class VerifyVersionCommand(install):
@@ -18,7 +18,7 @@ def requirements(file_name):
     return open(file_name, 'rt').read().splitlines()
 
 
-setup(name='tortoise_rest_utils',
+setup(name='async_easy_utils',
       version=VERSION,
       author='t1waz',
       author_email='milewiczmichal87@gmail.com',

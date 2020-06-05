@@ -7,8 +7,8 @@ from tortoise import fields as model_fields
 from tortoise.fields.relational import ForeignKeyFieldInstance
 from tortoise.models import Model
 
-from tortoise_rest_utils.serializer.exceptions import ValidationError
-from tortoise_rest_utils.serializer.fields import (
+from async_easy_utils.serializer.exceptions import ValidationError
+from async_easy_utils.serializer.fields import (
     StringField,
     IntegerField,
     RelatedField,

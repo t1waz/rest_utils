@@ -1,9 +1,9 @@
 from tortoise import fields
 from tortoise.models import Model
 
-from tortoise_rest_utils.serializer import Serializer
-from tortoise_rest_utils.serializer.fields import SlugRelatedField
-from tortoise_rest_utils.view import View
+from async_easy_utils.serializer import Serializer
+from async_easy_utils.serializer.fields import SlugRelatedField
+from async_easy_utils.view import View
 
 
 class SampleModel(Model):

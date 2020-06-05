@@ -14,17 +14,17 @@ from tests.helpers import (
     DBHandler,
     FakeRequest,
 )
-from tortoise_rest_utils.serializer import Serializer
-from tortoise_rest_utils.serializer.exceptions import ValidationError
-from tortoise_rest_utils.serializer.fields import (
+from async_easy_utils.serializer import Serializer
+from async_easy_utils.serializer.exceptions import ValidationError
+from async_easy_utils.serializer.fields import (
     IntegerField,
     StringField,
     BinaryField,
     DateTimeField,
     MethodField,
 )
-from tortoise_rest_utils.serializer.fields import SlugRelatedField
-from tortoise_rest_utils.view import View
+from async_easy_utils.serializer.fields import SlugRelatedField
+from async_easy_utils.view import View
 
 
 class TestSerializerMeta(unittest.TestCase):
