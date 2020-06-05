@@ -1,7 +1,7 @@
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/2f2a446ef74646ec8494676a65eecb6b)](https://www.codacy.com/manual/t1waz/rest_utils?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=t1waz/rest_utils&amp;utm_campaign=Badge_Grade)[![CircleCI](https://circleci.com/gh/t1waz/rest_utils.svg?style=shield)](https://circleci.com/gh/t1waz/rest_utils)[![PyPI version](https://badge.fury.io/py/async-easy-utils.svg)](https://badge.fury.io/py/async-easy-utils)
 
-TORTOISE REST UTILS
-===================
+ASYNC EASY UTILS
+================
 Simple tools to create RESTful backend API based on TorToiseORM and Starlette stack.
 
 DESCRIPTION
@@ -88,7 +88,7 @@ It is possible to create custom validation method for field from model attribute
 Methods that start with 'validate_' are handled like validators to model attribute in pattern: 'validate_<field_name>'. 
 During validation Serializer pass initial data into each validator method. Each validator method is corutine.
 
-It is possible to create foregin key slug field:
+It is possible to create foreign key slug field:
 
     class SampleSerializer(Serializer):
         sample_slug = ForeignKeyField(slug_field='foo',

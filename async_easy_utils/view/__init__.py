@@ -1,34 +1,12 @@
 import asyncio
 
+from starlette.concurrency import run_in_threadpool
 from starlette.endpoints import HTTPEndpoint
+from starlette.requests import Request
 from starlette.responses import JSONResponse
 from tortoise import exceptions
-from starlette.requests import Request
-from starlette.concurrency import run_in_threadpool
 
-
-class ViewValidator:
-    def __init__(self, instance, attrs):
-        self._instance = instance
-        self._attrs = attrs
-
-    def check_if_queryset_exists(self):
-        if 'get_queryset' not in self._attrs:
-            raise ValueError(f'{self._instance.__name__} missing queryset in view')
-
-    def check_if_serializer_class_exists(self):
-        if 'serializer_class' not in self._attrs:
-            raise ValueError(f'{self._instance.__name__} missing serializer_class in view')
-
-    def check_if_serializer_class_is_serializer_instance(self):
-        pass
-
-    @classmethod
-    def validate(cls, instance, attrs):
-        validator = cls(instance, attrs)
-        validator.check_if_queryset_exists()
-        validator.check_if_serializer_class_exists()
-        validator.check_if_serializer_class_is_serializer_instance()
+from async_easy_utils.view.validators import ViewMetaValidator
 
 
 class ViewMeta(type):
@@ -37,7 +15,7 @@ class ViewMeta(type):
         if not bases or HTTPEndpoint in bases:
             return instance
 
-        ViewValidator.validate(instance, attrs)
+        ViewMetaValidator.validate(instance, attrs)
 
         instance.get_queryset = attrs['get_queryset']
         instance.serializer = attrs['serializer_class']
