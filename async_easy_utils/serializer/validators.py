@@ -15,7 +15,7 @@ class SerializerMetaValidator(MetaValidatorMixin):
 
     @staticmethod
     def get_variable_from_method_name(method_name='', splitter='', end_rstrip=''):
-        return next(iter(method_name.split(splitter)[1:2]), '').rstrip(end_rstrip)
+        return next(iter(method_name.split(splitter, 1)[1:2]), '').rstrip(end_rstrip)
 
     def check_if_meta_exists(self):
         if self._meta is None:
