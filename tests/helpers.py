@@ -6,6 +6,7 @@ from tortoise import Tortoise
 from tests.fixtures import (
     SampleModel,
     SampleModelChild,
+    SampleModelGroups,
 )
 
 
@@ -22,6 +23,7 @@ class DBHandler:
     async def clear_models(cls):
         await SampleModel.all().delete()
         await SampleModelChild.all().delete()
+        await SampleModelGroups.all().delete()
 
     @classmethod
     async def init_models(cls):
@@ -61,6 +63,14 @@ class DBHandler:
                                           sample_model=sample_model_1,
                                           created=datetime.datetime.now())
         await sample_model_4.save()
+
+        sample_model_group_1 = SampleModelGroups(name='group_1')
+        await sample_model_group_1.save()
+        await sample_model_group_1.sample_models.add(sample_model_1, sample_model_2)
+
+        sample_model_group_2 = SampleModelGroups(name='group_2')
+        await sample_model_group_2.save()
+        await sample_model_group_2.sample_models.add(sample_model_1, sample_model_3)
 
     @classmethod
     async def open_db(cls):

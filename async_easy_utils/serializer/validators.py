@@ -41,7 +41,7 @@ class SerializerMetaValidator(MetaValidatorMixin):
         if not issubclass(self._meta.model, Model):
             raise ValueError(f'{self._instance.__name__} Meta model is not TorToise model instance')
 
-    def check_if_meta_fields_containts_proper_values(self):
+    def check_if_meta_fields_contains_proper_values(self):
         if not all(attr in self.allowed_fields for attr in self._meta.fields):
             raise ValueError('incorrect Meta field declaration - some fields does '
                              'not belong to model or serialized fields')
@@ -76,3 +76,17 @@ class SerializerMetaValidator(MetaValidatorMixin):
     def allowed_fields(self):
         return list(itertools.chain(
             self.model_fields, self.serialized_fields, self.declared_fields))
+
+    @classmethod
+    def validate(cls, instance, attrs):
+        validator = cls(instance, attrs)
+
+        validator.check_if_meta_exists()
+        validator.check_if_model_in_meta()
+        validator.check_if_fields_in_meta()
+        validator.check_if_meta_fields_are_iterable()
+        validator.check_if_meta_fields_have_items()
+        validator.check_if_meta_model_is_tortoise_instance()
+        validator.check_if_meta_fields_contains_proper_values()
+        validator.check_meta_read_only_fields()
+        validator.check_if_all_declared_related_fields_in_meta_fields()

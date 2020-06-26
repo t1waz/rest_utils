@@ -2,18 +2,6 @@ import asyncio
 import json
 import unittest
 
-from tests.fixtures import (
-    SampleModel,
-    SampleModelChild,
-    IncorrectModel,
-    CorrectSerializerOne,
-    CorrectSerializerTwo,
-    SampleModelView,
-)
-from tests.helpers import (
-    DBHandler,
-    FakeRequest,
-)
 from async_easy_utils.serializer import Serializer
 from async_easy_utils.serializer.exceptions import ValidationError
 from async_easy_utils.serializer.fields import (
@@ -25,6 +13,21 @@ from async_easy_utils.serializer.fields import (
 )
 from async_easy_utils.serializer.fields import SlugRelatedField
 from async_easy_utils.view import View
+from tests.fixtures import (
+    SampleModel,
+    SampleModelChild,
+    IncorrectModel,
+    CorrectSerializerOne,
+    CorrectSerializerTwo,
+    CorrectSerializerFour,
+    SampleModelView,
+    SampleModelGroups,
+    CorrectSerializerFive,
+)
+from tests.helpers import (
+    DBHandler,
+    FakeRequest,
+)
 
 
 class TestSerializerMeta(unittest.TestCase):
@@ -209,10 +212,63 @@ class TestSerializer(unittest.TestCase):
 
         assert getattr(serializer, 'errors', False) == {}
 
+    def test_passing_not_dict_data_to_serializer(self):
+        with self.assertRaises(ValidationError):
+            serializer = CorrectSerializerTwo(data='not dict')
+
+            assert serializer
+
+    def test_if_datetime_field_return_correct_value_for_is_m2m(self):
+        datetime_field = DateTimeField()
+
+        assert getattr(datetime_field, 'is_m2m', None) is False
+
+    def test_if_method_field_return_correct_value_for_is_m2m(self):
+        method_field = MethodField(method=lambda x: x)
+
+        assert getattr(method_field, 'is_m2m', None) is False
+
+    def test_if_calling_to_interval_value_for_method_field_raise_error(self):
+        method_field = MethodField(method=lambda x: x)
+        with self.assertRaises(ValueError):
+            method_field.to_internal_value('test_value')
+
+    def test_incorrect_value_for_datetime_field(self):
+        with DBHandler():
+            input_data = {
+                'name': 'test_name should be here because its read only',
+                'number': 434,
+                'data': 'another data to store',
+                'sample_model': 'model_1',
+                'created': "not valid datetime value"
+            }
+
+            serializer = CorrectSerializerFive(data=input_data)
+            is_valid = asyncio.get_event_loop().run_until_complete(serializer.is_valid())
+
+            assert is_valid is False
+            assert 'created' in serializer.errors
+
+    def test_incorrect_value_for_binary_field(self):
+        with DBHandler():
+            input_data = {
+                'name': 'test_name should be here because its read only',
+                'number': 434,
+                'data': 1.0,
+                'sample_model': 'model_1',
+                'created': '1990-01-01 11:01:01',
+            }
+
+            serializer = CorrectSerializerFive(data=input_data)
+            is_valid = asyncio.get_event_loop().run_until_complete(serializer.is_valid())
+
+            assert is_valid is False
+            assert 'data' in serializer.errors
+
     def test_check_input_data_if_pk_in_input(self):
         input_data = {
             'id': 23,
-            'name': 'test_name should be here because its read only',
+            'name': 'aaaa',
             'number': 1,
             'data': 'some data to store',
             'sample_model': 'sample_model',
@@ -419,6 +475,38 @@ class TestSerializer(unittest.TestCase):
     def test_serializer_update(self):
         pass
 
+    def test_get_serializer_slug_related_field_many(self):
+        with DBHandler():
+            sample_model_groups = asyncio.get_event_loop().run_until_complete(
+                SampleModelGroups.all())
+
+            for sample_model_group in sample_model_groups:
+                serializer = CorrectSerializerFour(instance=sample_model_group)
+                serialized_object = asyncio.get_event_loop().run_until_complete(
+                    serializer.to_dict())
+
+                assert serialized_object['id'] == sample_model_group.id
+                assert serialized_object['name'] == sample_model_group.name
+
+                sample_models = asyncio.get_event_loop().run_until_complete(
+                    sample_model_group.sample_models.all().values_list('name', flat=True))
+                assert serialized_object['sample_models'] == sample_models
+
+    def test_save_serializer_slug_related_field_many(self):
+        with DBHandler():
+            input_data = {
+                'name': 'group_3',
+                'sample_models': ['model_2', 'model_3'],
+            }
+            serializer = CorrectSerializerFour(data=input_data)
+            is_valid = asyncio.get_event_loop().run_until_complete(serializer.is_valid())
+
+            assert is_valid is True
+            assert not serializer.errors
+
+            instance = asyncio.get_event_loop().run_until_complete(serializer.save())
+            assert instance
+
 
 class TestViewMeta(unittest.TestCase):
     def test_missing_queryset_in_view(self):
@@ -463,40 +551,36 @@ class TestView(unittest.TestCase):
             assert {'id': sample_model.id, 'name': sample_model.name} == response_data
 
     def test_get_incorrect_instance(self):
-        response = asyncio.get_event_loop().run_until_complete(
-            self.sample_model_view.instance(FakeRequest(url_params={'id': 'invalid id'})))
-        response_data = json.loads(response.body.decode())
+        with DBHandler():
+            response = asyncio.get_event_loop().run_until_complete(
+                self.sample_model_view.instance(FakeRequest(url_params={'id': 'invalid id'})))
+            response_data = json.loads(response.body.decode())
 
-        assert response_data == {'detail': 'not found'}
+            assert response_data == {'detail': 'not found'}
 
     def test_create_for_invalid_url(self):
-        response = asyncio.get_event_loop().run_until_complete(
-            self.sample_model_view.create(FakeRequest(url_params={'id': 'invalid id'})))
-        response_data = json.loads(response.body.decode())
+        with DBHandler():
+            response = asyncio.get_event_loop().run_until_complete(
+                self.sample_model_view.create(FakeRequest(url_params={'id': 'invalid id'})))
+            response_data = json.loads(response.body.decode())
 
-        assert response_data == {'detail': 'Method POST not allowed.'}
+            assert response_data == {'detail': 'Method POST not allowed.'}
 
     def test_create_for_incorrect_data(self):
-        response = asyncio.get_event_loop().run_until_complete(
-            self.sample_model_view.create(FakeRequest(data=b'/x///')))
-        response_data = json.loads(response.body.decode())
+        with DBHandler():
+            response = asyncio.get_event_loop().run_until_complete(
+                self.sample_model_view.create(FakeRequest(data=b'/x///')))
+            response_data = json.loads(response.body.decode())
 
-        assert response_data == {'detail': 'invalid request for create.'}
+            assert response_data == {'detail': 'invalid request for create.'}
 
     def test_create_for_invalid_data(self):
-        response = asyncio.get_event_loop().run_until_complete(
-            self.sample_model_view.create(FakeRequest(data={'name': [1, 2, 3]})))
-        response_data = json.loads(response.body.decode())
+        with DBHandler():
+            response = asyncio.get_event_loop().run_until_complete(
+                self.sample_model_view.create(FakeRequest(data={'name': [1, 2, 3]})))
+            response_data = json.loads(response.body.decode())
 
-        assert response_data == {'detail': {'name': 'incorrect value, cannot transform to string'}}
-
-    def test_create_when_internal_error(self):
-        response = asyncio.get_event_loop().run_until_complete(
-            self.sample_model_view.create(
-                FakeRequest(data={'name': 'correct name but no connection'})))
-        response_data = json.loads(response.body.decode())
-
-        assert response_data == {'detail': 'cannot create, internal error'}
+            assert response_data == {'detail': {'name': 'incorrect value, cannot transform to string'}}
 
     def test_create(self):
         with DBHandler():

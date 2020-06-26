@@ -2,6 +2,7 @@ import asyncio
 from collections import OrderedDict
 
 from tortoise import fields as model_fields
+from tortoise import transactions
 from tortoise.fields.relational import ForeignKeyFieldInstance
 
 from async_easy_utils.serializer.exceptions import ValidationError
@@ -39,17 +40,17 @@ class SerializerMeta(type):
         instance.fields = OrderedDict()
 
         for field_name in meta.fields:
-            model_field = meta.model._meta.fields_map.get(field_name)
-            field = cls.FIELD_MAPPING.get(model_field.__class__, MethodField)
+            if field_name not in attrs.keys():
+                model_field = meta.model._meta.fields_map.get(field_name)
+                field_class = cls.FIELD_MAPPING.get(model_field.__class__, MethodField)
 
-            if field is MethodField:
-                field = field(method=attrs.get(f'get_{field_name}'))
-            elif field is RelatedField:
-                field = attrs.get(field_name)
+                if field_class is MethodField:
+                    field = field_class(method=attrs.get(f'get_{field_name}'))
+                else:
+                    field = field_class()
             else:
-                field = field()
+                field = attrs.get(field_name)
 
-            field.setup_from_model_field(model_field)
             instance.fields[field_name] = field
 
         instance.read_only_fields = tuple(name for name, field in instance.fields.items() if
@@ -69,10 +70,13 @@ class Serializer(metaclass=SerializerMeta):
         if data and not isinstance(data, dict):
             raise ValidationError(f'{self.__class__.__name__} data is not dict')
 
-        self._data = data
         self._errors = {}
         self._instance = instance
-        self._validated_data = None
+
+        self._data = data
+        self._validated_data = {}
+        self._instance_validated_data = {}
+        self._instance_related_validated_data = {}
 
     def _check_input_data_for_missing_values(self):
         errors = {}
@@ -95,6 +99,30 @@ class Serializer(metaclass=SerializerMeta):
 
         return valid, errors
 
+    @transactions.atomic()
+    async def _handle_m2m_data(self):
+        success = True
+        for attr_name, values in self._instance_related_validated_data.items():
+            m2m_attr_manager = getattr(self._instance, attr_name, None)
+
+            try:
+                await m2m_attr_manager.add(*values)
+            except (ValueError, AttributeError):
+                success = False
+                self._errors[attr_name] = f'cannot save with with value/values {values}'
+                break
+
+        return success
+
+    def _set_validated_data(self, data):
+        self._validated_data = data
+
+        for field, value in self._validated_data.items():
+            if self.fields.get(field).is_m2m:
+                self._instance_related_validated_data[field] = value
+            else:
+                self._instance_validated_data[field] = value
+
     async def is_valid(self):
         if not self._data:
             raise ValidationError('initial data not provided, cannot call is_valid()')
@@ -112,33 +140,35 @@ class Serializer(metaclass=SerializerMeta):
 
         is_valid = not bool(self._errors)
         if is_valid:
-            self._validated_data = {field: value for field, value
-                                    in zip(self._data.keys(), values) if value}
+            self._set_validated_data({name: value for name, value in
+                                      zip(self._data.keys(), values)})
 
         return is_valid
 
-    async def to_dict(self):
-        if not self._instance:
-            raise ValidationError('first call is_valid')
-
-        tasks = [field.to_representation(getattr(self._instance, name, self._instance))
-                 for name, field in self.fields.items()]
-        values = await asyncio.gather(*tasks)
-
-        return {name: value for name, value in zip(self.fields.keys(), values)}
-
-    async def save(self, to_dict=False):
-        if self._errors:
-            raise ValidationError('cannot save, data not valid')
-        elif self._data is not None and self._validated_data is None:
+    def _validate_can_perform_write_operation(self):
+        if self.errors:
+            raise ValidationError('invalid data')
+        elif self._data is not None and not self._validated_data:
             raise ValidationError('run is_valid first')
 
+    async def save(self, to_dict=False):
+        self._validate_can_perform_write_operation()
+
         try:
-            self._instance = self.model(**self._validated_data)
+            self._instance = self.model(**self._instance_validated_data)
             await self._instance.save()
         except (ValueError, AttributeError):
-            self._errors.update({'error': 'cannot save instance'})
             self._instance = None
+            self._errors.update({'error': 'cannot save instance'})
+
+            return self._instance
+
+        m2m_save = await self._handle_m2m_data()
+        if not m2m_save:
+            self._instance = None
+            await self._instance.delete()
+
+            return self._instance
 
         if to_dict:
             return await self.to_dict()
@@ -146,15 +176,15 @@ class Serializer(metaclass=SerializerMeta):
         return self._instance
 
     async def update(self):
-        if self._errors:
-            raise ValidationError('cannot save, data not valid')
-        elif self._data is not None and self._validated_data is None:
-            raise ValidationError('run is_valid first')
+        self._validate_can_perform_write_operation()
 
-        for attr, value in self._validated_data.items():
+        for attr, value in self._instance_validated_data.items():
             setattr(self._instance, attr, value)
 
-        status = True
+        status = await self._handle_m2m_data()
+        if not status:
+            return status
+
         try:
             await self._instance.save()
         except (ValueError, AttributeError):
@@ -165,6 +195,16 @@ class Serializer(metaclass=SerializerMeta):
 
     async def delete(self):
         pass
+
+    async def to_dict(self):
+        if not self._instance:
+            raise ValidationError('first call is_valid')
+
+        tasks = [field.to_representation(getattr(self._instance, name, self._instance))
+                 for name, field in self.fields.items()]
+        values = await asyncio.gather(*tasks)
+
+        return {name: value for name, value in zip(self.fields.keys(), values)}
 
     @property
     def validated_data(self):

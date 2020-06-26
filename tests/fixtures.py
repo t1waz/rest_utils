@@ -20,6 +20,11 @@ class SampleModelChild(Model):
     sample_model = fields.ForeignKeyField('tests.SampleModel', related_name='childs')
 
 
+class SampleModelGroups(Model):
+    name = fields.TextField(max_lenght=400)
+    sample_models = fields.ManyToManyField('tests.SampleModel', related_name='groups')
+
+
 class IncorrectModel:
     pass
 
@@ -45,23 +50,33 @@ class CorrectSerializerTwo(Serializer):
 
 
 class CorrectSerializerThree(Serializer):
+    class Meta:
+        model = SampleModel
+        fields = ('id', 'name')
+
+
+class CorrectSerializerFour(Serializer):
+    sample_models = SlugRelatedField(many=True,
+                                     queryset=lambda: SampleModel.all(),
+                                     slug_field='name')
+
+    class Meta:
+        model = SampleModelGroups
+        fields = ('id', 'name', 'sample_models')
+
+
+class CorrectSerializerFive(Serializer):
     sample_model = SlugRelatedField(many=False,
                                     queryset=lambda: SampleModel.all(),
                                     slug_field='name')
 
     class Meta:
         model = SampleModelChild
-        fields = ('id', 'sample_model')
-
-
-class CorrectSerializerFour(Serializer):
-    class Meta:
-        model = SampleModel
-        fields = ('id', 'name')
+        fields = ('id', 'name', 'number', 'created', 'data', 'sample_model')
 
 
 class SampleModelView(View):
-    serializer_class = CorrectSerializerFour
+    serializer_class = CorrectSerializerThree
 
     def get_queryset(self):
         return SampleModel.all()

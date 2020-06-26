@@ -40,7 +40,7 @@ class View(HTTPEndpoint, metaclass=ViewMeta):
             'status_code': 200
         }
 
-    async def dispatch(self) -> None:
+    async def dispatch(self) -> None:  # pragma: no cover
         request = Request(self.scope, receive=self.receive)
         request_method = "get" if request.method == "HEAD" else request.method.lower()
         if 'id' in request.path_params:
