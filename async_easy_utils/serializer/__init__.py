@@ -27,18 +27,11 @@ class SerializerMeta(type):
         ForeignKeyFieldInstance: RelatedField,
     }
 
-    def __new__(cls, name, bases, attrs, **kwargs):
-        instance = super().__new__(cls, name, bases, attrs, **kwargs)
-        if not bases:
-            return instance
+    @classmethod
+    def _setup_fields_from_meta(cls, meta, instance, attrs):
+        read_only_fields = getattr(meta, 'read_only_fields', ())
 
-        SerializerMetaValidator.validate(instance, attrs)
-
-        meta = attrs.get('Meta')
-        instance.model = meta.model
-        instance.model_pk_field_name = instance.model._meta.pk_attr
         instance.fields = OrderedDict()
-
         for field_name in meta.fields:
             if field_name not in attrs.keys():
                 model_field = meta.model._meta.fields_map.get(field_name)
@@ -51,13 +44,21 @@ class SerializerMeta(type):
             else:
                 field = attrs.get(field_name)
 
+            field.read_only = field_name in read_only_fields
             instance.fields[field_name] = field
 
-        instance.read_only_fields = tuple(name for name, field in instance.fields.items() if
-                                          isinstance(field, MethodField))
-        meta_read_only_fields = getattr(meta, 'read_only_fields', None)
-        if meta_read_only_fields:
-            instance.read_only_fields = instance.read_only_fields + meta_read_only_fields
+    def __new__(cls, name, bases, attrs, **kwargs):
+        instance = super().__new__(cls, name, bases, attrs, **kwargs)
+        if not bases:
+            return instance
+
+        SerializerMetaValidator.validate(instance, attrs)
+
+        meta = attrs.get('Meta')
+        instance.model = meta.model
+        instance.model_pk_field_name = instance.model._meta.pk_attr
+
+        cls._setup_fields_from_meta(meta, instance, attrs)
 
         return instance
 
@@ -81,21 +82,25 @@ class Serializer(metaclass=SerializerMeta):
     def _check_input_data_for_missing_values(self):
         errors = {}
         valid = True
-        input_read_only_fields = [f for f in self._data.keys() if f in self.read_only_fields]
-        if any(input_read_only_fields):
+
+        data_read_only_mapping = {field_name: field_name in self._data for field_name, field in
+                                  self.fields.items() if field.read_only}
+        if any(data_read_only_mapping.values()):
             valid = False
-            errors.update({field: 'field is read only' for field in input_read_only_fields})
+            errors.update({field_name: 'field is read only' for field_name, is_read_only in
+                           data_read_only_mapping.items() if is_read_only})
 
         if self.model_pk_field_name in self._data.keys():
             valid = False
             errors[self.model_pk_field_name] = 'primary key, cannot be in input'
 
-        keys_diff = set(name for name in self.fields.keys() if
-                        name not in self.read_only_fields).difference(set(self._data.keys()))
-        keys_diff.discard(self.model_pk_field_name)
-        if bool(keys_diff):
+        allowed_fields = (field_name for field_name, field in
+                          self.fields.items() if not field.read_only)
+        missing_fields = set(allowed_fields).difference(set(self._data.keys()))
+        missing_fields.discard(self.model_pk_field_name)
+        if missing_fields:
             valid = False
-            errors.update({field: 'missing in input' for field in keys_diff})
+            errors.update({field: 'missing in input' for field in missing_fields})
 
         return valid, errors
 

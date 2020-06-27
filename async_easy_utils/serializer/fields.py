@@ -12,6 +12,14 @@ class SerializerField:
     def is_m2m(self):
         raise NotImplementedError()  # pragma: no cover
 
+    @property
+    def read_only(self):
+        return getattr(self, '_read_only', False)
+
+    @read_only.setter
+    def read_only(self, value):
+        self._read_only = value
+
 
 class RelatedField(SerializerField):
     def __init__(self, queryset=None, many=False, *args, **kwargs):
@@ -130,3 +138,11 @@ class MethodField(SerializerField):
     @property
     def is_m2m(self):
         return False
+
+    @property
+    def read_only(self):
+        return True
+
+    @read_only.setter
+    def read_only(self, value):
+        pass

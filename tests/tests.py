@@ -187,8 +187,6 @@ class TestSerializerMeta(unittest.TestCase):
         }
 
         assert hasattr(correct_serializer, 'fields')
-        assert hasattr(correct_serializer, 'read_only_fields')
-        assert correct_serializer.read_only_fields == ('ser_test', 'created')
 
         for field_name, field in correct_serializer.fields.items():
             assert isinstance(field, correct_serializer_fields.get(field_name))
