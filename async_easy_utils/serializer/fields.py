@@ -14,7 +14,8 @@ class SerializerField:
     async def to_representation(self, value):
         raise NotImplementedError()  # pragma: no cover
 
-    def _validate_read_only_value(self, value):
+    @staticmethod
+    def _validate_read_only_value(value):
         if not isinstance(value, bool):
             raise InvalidSerializer('read only value must be bool')
 
