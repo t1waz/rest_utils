@@ -39,29 +39,41 @@ class SerializerMetaValidator(MetaValidatorMixin):
 
     def check_if_meta_model_is_tortoise_instance(self):
         if not issubclass(self._meta.model, Model):
-            raise ValueError(f'{self._instance.__name__} Meta model is not TorToise model instance')
+            raise ValueError(
+                f'{self._instance.__name__} Meta model is not TorToise model instance'
+            )
 
     def check_if_meta_fields_contains_proper_values(self):
         if not all(attr in self.allowed_fields for attr in self._meta.fields):
-            raise ValueError('incorrect Meta field declaration - some fields does '
-                             'not belong to model or serialized fields')
+            raise ValueError(
+                'incorrect Meta field declaration - some fields does '
+                'not belong to model or serialized fields'
+            )
 
     def check_meta_read_only_fields(self):
         read_only_fields = getattr(self._meta, 'read_only_fields', None)
-        if read_only_fields and not all(attr in self.allowed_fields for attr in read_only_fields):
-            raise ValueError('incorrect Meta read_only_field declaration - some fields '
-                             'does not belong to model or serialized fields')
+        if read_only_fields and not all(
+            attr in self.allowed_fields for attr in read_only_fields
+        ):
+            raise ValueError(
+                'incorrect Meta read_only_field declaration - some fields '
+                'does not belong to model or serialized fields'
+            )
 
     def check_if_all_declared_related_fields_in_meta_fields(self):
         if not all(attr in self._meta.fields for attr in self.declared_fields):
-            raise ValueError('incorrect related field declaration - some fields '
-                             'was not included to fields')
+            raise ValueError(
+                'incorrect related field declaration - some fields '
+                'was not included to fields'
+            )
 
     @property
     def serialized_fields(self):
-        return {self.get_variable_from_method_name(name, 'get_', '_')
-                for name, attr in self._attrs.items() if callable(attr) and
-                self.get_variable_from_method_name(name, 'get_', '_')}
+        return {
+            self.get_variable_from_method_name(name, 'get_', '_')
+            for name, attr in self._attrs.items()
+            if callable(attr) and self.get_variable_from_method_name(name, 'get_', '_')
+        }
 
     @property
     def model_fields(self):
@@ -69,13 +81,19 @@ class SerializerMetaValidator(MetaValidatorMixin):
 
     @property
     def declared_fields(self):
-        return {name for name, attr in self._attrs.items()
-                if issubclass(attr.__class__, RelatedField)}
+        return {
+            name
+            for name, attr in self._attrs.items()
+            if issubclass(attr.__class__, RelatedField)
+        }
 
     @property
     def allowed_fields(self):
-        return list(itertools.chain(
-            self.model_fields, self.serialized_fields, self.declared_fields))
+        return list(
+            itertools.chain(
+                self.model_fields, self.serialized_fields, self.declared_fields
+            )
+        )
 
     @classmethod
     def validate(cls, instance, attrs):

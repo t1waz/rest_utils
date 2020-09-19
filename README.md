@@ -98,6 +98,4 @@ It is possible to create foreign key slug field:
     class Meta:
         model = SampleModel
         fields = (attribute_1', 'attribute_2', 'sample_slug')
-        
-
 

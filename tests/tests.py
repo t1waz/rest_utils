@@ -169,8 +169,7 @@ class TestSerializerMeta(unittest.TestCase):
         correct_serializer = CorrectSerializerOne()
         assert hasattr(correct_serializer, 'model')
         assert correct_serializer.model == SampleModel
-        assert hasattr(correct_serializer, 'model_pk_field_name')
-        assert correct_serializer.model_pk_field_name == SampleModel._meta.pk_attr
+        assert SampleModel._meta.pk_attr in correct_serializer.fields.keys()
 
     def test_serializer_fields_initialization(self):
         correct_serializer = CorrectSerializerTwo()
@@ -204,7 +203,7 @@ class TestSerializer(unittest.TestCase):
             serializer = CorrectSerializerTwo(instance=IncorrectModel())
 
             assert serializer
-
+#
     def test_serializer_has_errors(self):
         serializer = CorrectSerializerTwo()
 
@@ -234,7 +233,7 @@ class TestSerializer(unittest.TestCase):
     def test_incorrect_value_for_datetime_field(self):
         with DBHandler():
             input_data = {
-                'name': 'test_name should be here because its read only',
+                'name': 'test_name',
                 'number': 434,
                 'data': 'another data to store',
                 'sample_model': 'model_1',
@@ -246,11 +245,11 @@ class TestSerializer(unittest.TestCase):
 
             assert is_valid is False
             assert 'created' in serializer.errors
-
+#
     def test_incorrect_value_for_binary_field(self):
         with DBHandler():
             input_data = {
-                'name': 'test_name should be here because its read only',
+                'name': 'test_name',
                 'number': 434,
                 'data': 1.0,
                 'sample_model': 'model_1',
@@ -262,7 +261,7 @@ class TestSerializer(unittest.TestCase):
 
             assert is_valid is False
             assert 'data' in serializer.errors
-
+#
     def test_check_input_data_if_pk_in_input(self):
         input_data = {
             'id': 23,
@@ -273,14 +272,13 @@ class TestSerializer(unittest.TestCase):
         }
 
         serializer = CorrectSerializerTwo(data=input_data)
-        is_valid, errors = serializer._check_input_data_for_missing_values()
+        serializer._check_input_data_for_primary_key()
 
-        assert is_valid is False
-        assert errors == {'id': 'primary key, cannot be in input'}
+        assert serializer.errors == {'id': 'primary key, cannot be in input'}
 
     def test_check_input_data_if_read_only_in_input(self):
         input_data = {
-            'name': 'test_name should be here because its read only',
+            'name': 'test_name',
             'number': 1,
             'created': '1990-01-01',
             'data': 'some data to store',
@@ -288,14 +286,13 @@ class TestSerializer(unittest.TestCase):
         }
 
         serializer = CorrectSerializerTwo(data=input_data)
-        is_valid, errors = serializer._check_input_data_for_missing_values()
+        serializer._check_input_data_for_read_only_values()
 
-        assert is_valid is False
-        assert errors == {'created': 'field is read only'}
-
+        assert serializer.errors == {'created': 'field is read only'}
+#
     def test_check_input_data_if_serialized_method_in_input(self):
         input_data = {
-            'name': 'test_name should be here because its read only',
+            'name': 'test_name',
             'number': 1,
             'ser_test': 'this field should not be included, its method field',
             'data': 'some data to store',
@@ -303,37 +300,34 @@ class TestSerializer(unittest.TestCase):
         }
 
         serializer = CorrectSerializerTwo(data=input_data)
-        is_valid, errors = serializer._check_input_data_for_missing_values()
+        serializer._check_input_data_for_read_only_values()
 
-        assert is_valid is False
-        assert errors == {'ser_test': 'field is read only'}
+        assert serializer.errors == {'ser_test': 'field is read only'}
 
     def test_check_input_data_if_missing_input(self):
         input_data = {
-            'name': 'test_name should be here because its read only',
+            'name': 'test_name',
             'data': 'some data to store',
             'sample_model': 'sample_model',
         }
 
         serializer = CorrectSerializerTwo(data=input_data)
-        is_valid, errors = serializer._check_input_data_for_missing_values()
+        serializer._check_input_data_for_missing_values()
 
-        assert is_valid is False
-        assert errors == {'number': 'missing in input'}
+        assert serializer.errors == {'number': 'missing in input'}
 
     def test_check_input_data_for_valid_input(self):
         input_data = {
             'number': 1,
-            'name': 'test_name should be here because its read only',
+            'name': 'test_name',
             'data': 'some data to store',
             'sample_model': 'sample_model',
         }
 
         serializer = CorrectSerializerTwo(data=input_data)
-        is_valid, errors = serializer._check_input_data_for_missing_values()
+        serializer._check_input_data_for_missing_values()
 
-        assert is_valid
-        assert not errors
+        assert not serializer.errors
 
     def test_serializer_is_valid_for_invalid_data(self):
         with DBHandler():

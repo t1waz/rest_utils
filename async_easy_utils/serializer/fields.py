@@ -1,12 +1,26 @@
+import ast
 from datetime import datetime
+from async_easy_utils.serializer.exceptions import InvalidSerializer
 
 
 class SerializerField:
+    def __init__(self, pk=False, read_only=False):
+        self._pk = pk
+        self._read_only = read_only
+
     async def to_internal_value(self, value):
         raise NotImplementedError()  # pragma: no cover
 
     async def to_representation(self, value):
         raise NotImplementedError()  # pragma: no cover
+
+    def _validate_read_only_value(self, value):
+        if not isinstance(value, bool):
+            raise InvalidSerializer('read only value must be bool')
+
+    @property
+    def pk(self):
+        return self._pk
 
     @property
     def is_m2m(self):
@@ -14,10 +28,18 @@ class SerializerField:
 
     @property
     def read_only(self):
+        if self._pk:
+            return True
+
         return getattr(self, '_read_only', False)
 
     @read_only.setter
     def read_only(self, value):
+        self._validate_read_only_value(value=value)
+
+        if self._pk and value is False:
+            raise InvalidSerializer('primary key can be only read only')
+
         self._read_only = value
 
 
@@ -118,6 +140,29 @@ class BinaryField(SerializerField):
             return value.encode('utf-8'), None
         except (ValueError, AttributeError):
             return None, 'incorrect value, cannot transform to binary'
+
+    @property
+    def is_m2m(self):
+        return False
+
+
+class JSONField(SerializerField):
+    async def to_representation(self, value):
+        return value
+
+    async def to_internal_value(self, value):
+        if isinstance(value, dict):
+            return value, None
+
+        elif not isinstance(value, str):
+            return None, 'incorrect value'
+
+        try:
+            value = ast.literal_eval(value)
+        except ValueError:
+            return None, 'incorrect value, cannot transform to dict'
+
+        return value, None
 
     @property
     def is_m2m(self):

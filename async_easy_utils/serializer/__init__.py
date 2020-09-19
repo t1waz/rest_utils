@@ -5,26 +5,21 @@ from tortoise import fields as model_fields
 from tortoise import transactions
 from tortoise.fields.relational import ForeignKeyFieldInstance
 
+from async_easy_utils.serializer import fields as serializer_fields
 from async_easy_utils.serializer.exceptions import ValidationError
-from async_easy_utils.serializer.fields import (
-    StringField,
-    IntegerField,
-    RelatedField,
-    DateTimeField,
-    BinaryField,
-    MethodField,
-)
 from async_easy_utils.serializer.validators import SerializerMetaValidator
 
 
 class SerializerMeta(type):
     FIELD_MAPPING = {
-        model_fields.UUIDField: StringField,
-        model_fields.TextField: StringField,
-        model_fields.IntField: IntegerField,
-        model_fields.DatetimeField: DateTimeField,
-        model_fields.BinaryField: BinaryField,
-        ForeignKeyFieldInstance: RelatedField,
+        model_fields.UUIDField: serializer_fields.StringField,
+        model_fields.TextField: serializer_fields.StringField,
+        model_fields.IntField: serializer_fields.IntegerField,
+        model_fields.DatetimeField: serializer_fields.DateTimeField,
+        model_fields.BinaryField: serializer_fields.BinaryField,
+        model_fields.JSONField: serializer_fields.JSONField,
+        model_fields.IntEnumField: serializer_fields.IntegerField,
+        ForeignKeyFieldInstance: serializer_fields.RelatedField,
     }
 
     @classmethod
@@ -35,16 +30,19 @@ class SerializerMeta(type):
         for field_name in meta.fields:
             if field_name not in attrs.keys():
                 model_field = meta.model._meta.fields_map.get(field_name)
-                field_class = cls.FIELD_MAPPING.get(model_field.__class__, MethodField)
+                field_class = cls.FIELD_MAPPING.get(
+                    model_field.__class__, serializer_fields.MethodField
+                )
 
-                if field_class is MethodField:
+                if field_class is serializer_fields.MethodField:
                     field = field_class(method=attrs.get(f'get_{field_name}'))
                 else:
-                    field = field_class()
+                    field = field_class(pk=field_name is instance.model._meta.pk_attr)
             else:
                 field = attrs.get(field_name)
 
-            field.read_only = field_name in read_only_fields
+            if not field.pk:
+                field.read_only = field_name in read_only_fields
             instance.fields[field_name] = field
 
     def __new__(cls, name, bases, attrs, **kwargs):
@@ -57,7 +55,6 @@ class SerializerMeta(type):
         meta = attrs.get('Meta')
         instance.model = meta.model
         instance.model_pk_field_name = instance.model._meta.pk_attr
-
         cls._setup_fields_from_meta(meta, instance, attrs)
 
         return instance
@@ -65,11 +62,7 @@ class SerializerMeta(type):
 
 class Serializer(metaclass=SerializerMeta):
     def __init__(self, instance=None, data=None):
-        if instance and not issubclass(instance.__class__, self.model):
-            raise ValidationError(f'{self.__class__.__name__} instance not serializer model class')
-
-        if data and not isinstance(data, dict):
-            raise ValidationError(f'{self.__class__.__name__} data is not dict')
+        self._validate_input(instance, data)
 
         self._errors = {}
         self._instance = instance
@@ -79,30 +72,56 @@ class Serializer(metaclass=SerializerMeta):
         self._instance_validated_data = {}
         self._instance_related_validated_data = {}
 
-    def _check_input_data_for_missing_values(self):
-        errors = {}
-        valid = True
+    def _validate_input(self, instance, data):
+        if instance and not issubclass(instance.__class__, self.model):
+            raise ValidationError(
+                f'{self.__class__.__name__} instance not serializer model class'
+            )
 
-        data_read_only_mapping = {field_name: field_name in self._data for field_name, field in
-                                  self.fields.items() if field.read_only}
-        if any(data_read_only_mapping.values()):
-            valid = False
-            errors.update({field_name: 'field is read only' for field_name, is_read_only in
-                           data_read_only_mapping.items() if is_read_only})
+        if data and not isinstance(data, dict):
+            raise ValidationError(f'{self.__class__.__name__} data is not dict')
 
+    def _check_input_data_for_primary_key(self):
         if self.model_pk_field_name in self._data.keys():
-            valid = False
-            errors[self.model_pk_field_name] = 'primary key, cannot be in input'
+            self._errors.update(
+                {self.model_pk_field_name: 'primary key, cannot be in input'}
+            )
 
-        allowed_fields = (field_name for field_name, field in
-                          self.fields.items() if not field.read_only)
-        missing_fields = set(allowed_fields).difference(set(self._data.keys()))
-        missing_fields.discard(self.model_pk_field_name)
-        if missing_fields:
-            valid = False
-            errors.update({field: 'missing in input' for field in missing_fields})
+    def _check_input_data_for_read_only_values(self):
+        self._errors.update(
+            {
+                field_name: 'field is read only'
+                for field_name in self._data.keys()
+                if self.fields[field_name].read_only
+            }
+        )
 
-        return valid, errors
+    def _check_input_data_for_missing_values(self):
+        self._errors.update(
+            {
+                field_name: 'missing in input'
+                for field_name, field in self.fields.items()
+                if field_name not in self._data.keys() and not field.read_only
+            }
+        )
+
+    async def _process_input_data_to_fields_internal_values(self):
+        values, errors = zip(
+            *await asyncio.gather(
+                *[
+                    self.fields.get(name).to_internal_value(value)
+                    for name, value in self._data.items()
+                ]
+            )
+        )
+        self._errors.update(
+            {field: error for field, error in zip(self._data.keys(), errors) if error}
+        )
+
+        if not self._errors:
+            self._set_validated_data(
+                {name: value for name, value in zip(self._data.keys(), values)}
+            )
 
     @transactions.atomic()
     async def _handle_m2m_data(self):
@@ -132,23 +151,16 @@ class Serializer(metaclass=SerializerMeta):
         if not self._data:
             raise ValidationError('initial data not provided, cannot call is_valid()')
 
-        data_valid, errors = self._check_input_data_for_missing_values()
-        self.errors.update(errors)
-        if not data_valid:
+        self._check_input_data_for_primary_key()
+        self._check_input_data_for_missing_values()
+        self._check_input_data_for_read_only_values()
+
+        if self._errors:
             return False
 
-        tasks = [self.fields.get(name).to_internal_value(value)
-                 for name, value in self._data.items()]
-        values, errors = zip(*await asyncio.gather(*tasks))
-        self._errors.update({field: error for field, error
-                             in zip(self._data.keys(), errors) if error})
+        await self._process_input_data_to_fields_internal_values()
 
-        is_valid = not bool(self._errors)
-        if is_valid:
-            self._set_validated_data({name: value for name, value in
-                                      zip(self._data.keys(), values)})
-
-        return is_valid
+        return not bool(self._errors)
 
     def _validate_can_perform_write_operation(self):
         if self.errors:
@@ -205,8 +217,10 @@ class Serializer(metaclass=SerializerMeta):
         if not self._instance:
             raise ValidationError('first call is_valid')
 
-        tasks = [field.to_representation(getattr(self._instance, name, self._instance))
-                 for name, field in self.fields.items()]
+        tasks = [
+            field.to_representation(getattr(self._instance, name, self._instance))
+            for name, field in self.fields.items()
+        ]
         values = await asyncio.gather(*tasks)
 
         return {name: value for name, value in zip(self.fields.keys(), values)}
