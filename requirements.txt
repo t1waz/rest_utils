@@ -7,6 +7,6 @@ mccabe==0.6.1
 pycodestyle==2.5.0
 pyflakes==2.1.1
 PyPika==0.37.6
-starlette==0.13.4
+starlette==0.25.0
 tortoise-orm==0.16.13
 typing-extensions==3.7.4.2
